@@ -64,7 +64,7 @@ co2_monthly <- co2 |>
 ggplot(co2_monthly, aes(x = month, y = avg_co2)) +
   geom_line() +
   geom_point() +
-  scale_x_continuous(breaks = 1:12, labels = month.abb) +  # Use month abbreviations
+  scale_x_continuous(breaks = 1:12, labels = month.abb) +
   labs(x = "Month", y = "Average CO2 concentration (ppm)", 
        title = "Monthly Variation in CO2 Concentration") +
   theme_minimal()
@@ -107,12 +107,8 @@ You'll need to determine the file's delimiter and any comments or skips. You wil
 ```{r}
 temp <- read_table("https://data.giss.nasa.gov/gistemp/graphs/graph_data/Global_Mean_Estimates_based_on_Land_and_Ocean_Data/graph.txt",
                         skip = 5, 
-                        col_names = c("year", "no_smoothing", "lowess"), 
-                        col_types = cols(
-                          year = col_integer(),
-                          no_smoothing = col_double(),
-                          lowess = col_double()
-                        ))
+                        col_names = c("year", "no_smoothing", "lowess")
+                        )
 head(temp)
 ```
 **Question 5:**
@@ -187,6 +183,7 @@ tempQ7 |>
 By examining the data here, what evidence do you find or not find for such a pause? 
 
 **Answer 9:**
+As the window for rolling averages expands, a pause begins to reveal itself. Around the years of 1950-1980 the slope of the line begins to stabilize, although it never appears to be constant, compared to the rest of the data range a soft "pause" can be examined around 1950-1981 as the window for rolling averages increases.
 
 ## Longer term trends in CO2 Records
 
@@ -227,9 +224,58 @@ Your answer to Question 10 is going to be a mix of code chunks and text that you
 - Describe your conclusions to the question "How do recent atmospheric CO2 levels compare to historical levels?" using your plot as supporting evidence.   
 
 **Answer 10:**
+The vostok data set has columns for depth, age of the ice, age of the gas, and co2 concentration. They are all numeric classes with units of meters, yrBP, yrBP, and ppm. The temporal resolution of the data is a range of 400,000 years.
 
+After manipulating and analyzing the data and plots, we can conclude that recent atmospheric CO2 levels are higher than they've been historically. Historically CO2 concentrations have been fluctuating within a range of 170-300ppm on a around 50000 year cycle as we can see from the Vostok DF's trend. The line representing the Mauna Loa which shows us the recent CO2 concentration trends is much higher and rising, sitting in a range of 300-430ppm. In conclusion CO2 concentrations are much higher today than they have been for 400,000 years.
 ```{r}
+vostok <- read_table("vostok.icecore.co2", 
+                     skip = 20,  
+                     col_names = c("depth_m", "ice_age_yrBP", "gas_age_yrBP", "co2_ppmv"),
+                     na = c("-1", "-99.99"))
 
+#Reverse the ordering to create a chronological record so that each measurement is associcated with calender year.
+vostok <- vostok  |>
+  mutate(calendar_year = 1950 - gas_age_yrBP) |>
+  arrange(calendar_year)
+
+#Plot data.
+ggplot(vostok, aes(x = calendar_year, y = co2_ppmv)) +
+  geom_line(color = "blue") +
+  scale_x_continuous(limits = c(-420000, 2025), breaks = seq(-400000, 2025, by = 50000)) +
+  labs(
+    x = "Year (BCE/CE)", 
+    y = "CO2 Concentration (ppm)",
+    title = "Vostok Ice Core CO2 Concentrations Over Time") +
+  theme_minimal()
+
+#create mauna loa data set from warmup
+mauna_loa <- co2 |>
+  select(calendar_year = year, co2_ppmv = monthly_average) |> 
+  mutate(source = "Mauna Loa DF")
+
+
+#Combine this time series with the Mauna Loa data (the Warm-up exercise in this assignment).  You will use "bind_rows()".
+vostok_combined <- vostok |>
+  select(calendar_year, co2_ppmv) |>
+  mutate(source = "Vostok DF")
+
+combined_data <- bind_rows(vostok_combined, mauna_loa)
+
+#Plot the combined data. (the most recent time period must be on the right side of the plot).
+combined_data |> 
+  ggplot(aes(
+    x = calendar_year, 
+    y = co2_ppmv, 
+    color = source)) +
+    geom_line() +
+    scale_color_manual(values = c("Vostok DF" = "blue", "Mauna Loa DF" = "red")) +
+    scale_x_continuous(limits = c(-420000, 2025), breaks = seq(-400000, 2025, by = 50000)) +
+    labs(
+      x = "Year (BCE/CE)", 
+      y = "CO2 Concentration (ppm)",
+      title = "CO2 Concentrations: Vostok Ice Core and Mauna Loa Over Time") +
+    theme_minimal() 
+    
 
 ```
 
