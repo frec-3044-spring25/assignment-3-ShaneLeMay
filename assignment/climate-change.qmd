@@ -1,6 +1,6 @@
 ---
 title: "Climate Change Module"
-author: 'Add name'
+author: 'Shane LeMay'
 format:
   html:
     embed-resources: true
@@ -8,6 +8,8 @@ format:
 
 ```{r message=FALSE}
 library(tidyverse)
+library(dplyr)
+library(zoo)
 ```
 
 ## Warm-up: Examining CO2 trends in R
@@ -43,14 +45,32 @@ ggplot(co2, aes(x = decimal_date, y = monthly_average)) +
 
 Describe the overall trend in the CO2 data.
 
-**Answer 1:**
+**Answer 1:** 
+The CO2 concentration is on a steady rise
 
 **Question 2:**
 
 How does CO2 vary within a year?  What month is it at max?  Min?  What might explain this sub-annual pattern? (you will need to write code and make a plot to answer this question)
 
 **Answer 2:**
+CO2 fluctuates throughout the year and hits its max in the month of May. I believe the sub-annual pattern could be caused by vegetation dormancy in the winter months. Plants are not respirating as much and CO2 builds, spring rolls around and plants start to bloom and respirate again driving CO2 concentrations down. 
+```{r}
+#making dataframe of avreage co2 for each month
+co2_monthly <- co2 |> 
+  group_by(month) |> 
+  summarise(avg_co2 = mean(monthly_average, na.rm = TRUE))
 
+#plotting
+ggplot(co2_monthly, aes(x = month, y = avg_co2)) +
+  geom_line() +
+  geom_point() +
+  scale_x_continuous(breaks = 1:12, labels = month.abb) +  # Use month abbreviations
+  labs(x = "Month", y = "Average CO2 concentration (ppm)", 
+       title = "Monthly Variation in CO2 Concentration") +
+  theme_minimal()
+
+
+```
 
 
 ## Global Temperature Data
@@ -70,6 +90,11 @@ Describe the data set to the best of your ability, given the documentation provi
 - What is the difference between "global temperature" and "global temperature anomaly"? 
 
 **Answer 3:**
+The data comes from  NASA's Goddard Institute for Space Studies (GISS)
+The first column is Year, Integer class presumably, and units of year
+The second column is No_Smoothing, class numeric, degrees C
+The third column in Lowess, class numeric, degrees C
+The global temp is the temp for that year and the global temp anomaly is the difference of the temp from the longterm average
 
 
 **Question 4:**
@@ -79,12 +104,31 @@ Construct the necessary R code to import and prepare for plotting the following 
 You'll need to determine the file's delimiter and any comments or skips. You will also need to be sure that you have column names. You will not directly use the code above to read the CO2 data, but that code provides helpful tips for reading the data.
 
 **Answer 4:**
-
+```{r}
+temp <- read_table("https://data.giss.nasa.gov/gistemp/graphs/graph_data/Global_Mean_Estimates_based_on_Land_and_Ocean_Data/graph.txt",
+                        skip = 5, 
+                        col_names = c("year", "no_smoothing", "lowess"), 
+                        col_types = cols(
+                          year = col_integer(),
+                          no_smoothing = col_double(),
+                          lowess = col_double()
+                        ))
+head(temp)
+```
 **Question 5:**
 
 Plot the trend in global mean temperatures over time.  Describe what you see in the plot and how you interpret the patterns you observe.
 
 **Answer 5:**
+The anomaly in the  negative until the years the baseline average is from (1951-1980) then fluctuates around zero. After around 1980 the anomaly rises above the baseline into the future.
+```{r}
+ggplot(temp, aes(x = year, y = no_smoothing)) +
+  geom_line() +  # Raw anomaly
+  labs(x = "Year", y = "Temperature Anomaly (°C)",
+       title = "Global Temperature Anomaly (From 1951-1980 Average)") +
+  theme_minimal()
+```
+
 
 ## Evaluating the evidence for a "Pause" in warming?
 
@@ -97,20 +141,47 @@ You will use rolling averages to help you explore the evidence for a pause. Sinc
 Use a search engine (e.g., Google) or a chat LLM to find out how to calculate a rolling average in R. What search term or chat LLM prompt did you use?  What website or answer from the chat LLM did you end up using?  How much did you need to modify the code from the website or chat LLM to answer the question successfully?
 
 **Answer 6:**
-
+I searched using Google: "how to calculate rolling average in R" I ended up using the rollmean() fucntion from the zoo package and only had to modify the column name, window size to expand to 10 years
+```{r}
+tempQ6 <- temp |> 
+  mutate(rolling_avg = rollmean(no_smoothing, k=5, fill=NA, align='center'))
+```
 **Question 7:**
 
 - What is the meaning of "5-year average" vs. "annual average"?
 - Create a data frame from the annual temperature anomaly data (from Question 4) with three new columns: 5-year running averages, 10-year running averages, and 20-year running averages.
 
 **Answer 7:**
+A 5-year average is the rolling average over a 5 year window. The annual average would be the temp anomaly for just one year
 
+```{r}
+tempQ7 <- temp |> 
+  mutate(avg_5yr = rollmean(no_smoothing, k=5, fill=NA, align='center'),
+         avg_10yr = rollmean(no_smoothing, k=10, fill=NA, align='center'),
+         avg_20yr = rollmean(no_smoothing, k=20, fill=NA, align='center'))
+```
 **Question 8:**
 
 Plot the different averages on the *same plot* and describe what differences you see and why.  
 
 **Answer 8:**
+By examining the graph I noticed that the larger the window rolling average, the less fluctuation there is between years. I believe this is because as the window grows larger, more of the surrounding data is used to calculate the current value and this makes the change in slope of the lines less drastic.
 
+```{r}
+tempQ7 |> 
+  ggplot(aes(x = year)) +
+    geom_line(aes(y = no_smoothing, color = "Annual"), size = 0.5) +
+    geom_line(aes(y = avg_5yr, color = "5-Year"), size = 0.8) +
+    geom_line(aes(y = avg_10yr, color = "10-Year"), size = 0.8) +
+    geom_line(aes(y = avg_20yr, color = "20-Year"), size = 0.8) +
+    labs(x = "Year", y = "Temperature Anomaly (°C)",
+         title = "Global Temperature Anomalies with Different Rolling Averages",
+         color = "Average Type") +
+    scale_color_manual(values = c("Annual" = "black", "5-Year" = "blue", 
+                                  "10-Year" = "red", "20-Year" = "green")) +
+    theme_minimal() +
+    theme(legend.position = "bottom")
+```
 **Question 9:**
 
 By examining the data here, what evidence do you find or not find for such a pause? 
@@ -170,5 +241,25 @@ Remember to Render your document as HTML and comment+push to GitHub your code an
 
 Include citation of any AI-generated assistance or discussion with classmates (per policy in syllabus). Proper documentation of AI-generated assistance includes the prompt, the source (e.g., ChatGPT), and the significant parts of the response.  Proper documentation of discussion with classmates include listing their names and the components discussed.  
 
+AI ATTRIBUTION
 
+Prompt: generate labs, make a key, and tidy up this ggplot code 
 
+tempQ7 |> 
+  ggplot(aes(x = year)) +
+    geom_line(aes(y = no_smoothing, color = "Annual"), size = 0.5) +
+    geom_line(aes(y = avg_5yr, color = "5-Year"), size = 0.8) +
+    geom_line(aes(y = avg_10yr, color = "10-Year"), size = 0.8) +
+    geom_line(aes(y = avg_20yr, color = "20-Year"), size = 0.8)
+
+Source: Grok
+
+Significant parts: 
+(these techniques were then applied to all plots)
+labs(x = "Year", y = "Temperature Anomaly (°C)",
+       title = "Global Temperature Anomalies with Different Rolling Averages",
+       color = "Average Type") +
+  scale_color_manual(values = c("Annual" = "black", "5-Year" = "blue", 
+                                "10-Year" = "red", "20-Year" = "green")) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
